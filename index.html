@@ -519,7 +519,7 @@ async function resolveNet(silent) {
     if (await probeUrl(url)) {
       baseUrl = url;
       localStorage.setItem('hs_net', url);
-      if (!silent) setNetStatus(url === LOCAL_URL ? '🏠 Local network' : '🌐 Remote (VPN)');
+      if (!silent) setNetStatus(url === LOCAL_URL ? '🌐 Server Online' : '🌐 Server Online');
       setDot('ok');
       updateNetSettings();
       return true;
