@@ -1,0 +1,1865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="manifest" href="/spendings/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Household">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"/>
+<title>Household Ledger</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#f7f6f2;--surface:#ffffff;--surface2:#f0efe9;--border:#e2e1d9;
+  --text:#1a1a18;--text2:#6b6a62;--text3:#a8a79e;
+  --accent:#2d6a4f;--accent-light:#e8f4ee;--accent-text:#1b4332;
+  --danger:#c0392b;--danger-light:#fdf0ee;
+  --warn:#b7791f;--warn-light:#fef9ee;
+  --radius:12px;--radius-sm:8px;--radius-xs:6px;
+  --font:'DM Sans',sans-serif;--font-mono:'DM Mono',monospace;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#141412;--surface:#1e1e1b;--surface2:#252520;--border:#333330;
+    --text:#f0efe9;--text2:#8c8b82;--text3:#555550;
+    --accent:#52b788;--accent-light:#1b4332;--accent-text:#95d5b2;
+    --danger:#e74c3c;--danger-light:#2d1210;
+    --warn:#d4a017;--warn-light:#2a2005;
+  }
+}
+html{height:100%;background:var(--bg)}
+/* Key fix for Chrome mobile: use min-height with dvh so the layout fills
+   the visual viewport regardless of whether the address bar is shown */
+body{
+  font-family:var(--font);color:var(--text);font-size:15px;line-height:1.5;
+  background:var(--bg);
+  min-height:100vh;
+  min-height:100dvh;
+}
+button{font-family:var(--font);cursor:pointer}
+input,select,textarea{font-family:var(--font);font-size:15px;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;width:100%;outline:none;transition:border-color 0.15s}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b6a62' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+
+/* ── App shell ──
+   #app is a fixed overlay that always fills the visual viewport.
+   This is the correct fix for Chrome's collapsing toolbar problem.
+   position:fixed + inset:0 means top/bottom are always the screen edges,
+   not the layout viewport. */
+#app{
+  position:fixed;inset:0;
+  max-width:430px;margin:0 auto;
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+.screen{display:none;flex-direction:column;flex:1;overflow:hidden;min-height:0}
+.screen.active{display:flex}
+
+/* Topbar */
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:100}
+.topbar-brand{font-size:17px;font-weight:600;letter-spacing:-0.3px}
+.topbar-brand span{color:var(--accent)}
+.topbar-actions{display:flex;align-items:center;gap:4px}
+.icon-btn{background:none;border:none;padding:8px;border-radius:var(--radius-xs);color:var(--text2);display:flex;align-items:center;justify-content:center;transition:background 0.15s,color 0.15s}
+.icon-btn:hover{background:var(--surface2);color:var(--text)}
+.icon-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* Bottom nav — flex-shrink:0 keeps it pinned at the bottom of #app */
+.bottomnav{
+  background:var(--surface);border-top:1px solid var(--border);
+  display:flex;
+  flex-shrink:0;
+  /* safe-area for notched phones / home-bar phones */
+  padding:6px 0 calc(6px + env(safe-area-inset-bottom));
+  z-index:100;
+}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;background:none;border:none;color:var(--text3);font-size:11px;font-family:var(--font);transition:color 0.15s}
+.nav-item svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.nav-item.active{color:var(--accent)}
+
+/* Scrollable tab area fills remaining space */
+.tab-wrap{flex:1;overflow:hidden;position:relative;min-height:0}
+.tab-content{display:none;height:100%;overflow-y:auto;flex-direction:column}
+.tab-content.active{display:flex}
+.content{padding:16px;display:flex;flex-direction:column;gap:16px;padding-bottom:24px}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}
+.card-title{font-size:13px;font-weight:500;color:var(--text2);margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+
+/* Period banner */
+.period-banner{background:var(--accent);color:#fff;border-radius:var(--radius);padding:14px 18px}
+.period-banner-label{font-size:11px;font-weight:500;opacity:0.8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px}
+.period-banner-name{font-size:18px;font-weight:600;letter-spacing:-0.3px}
+.period-banner-dates{font-size:12px;opacity:0.75;margin-top:2px}
+
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:1fr;gap:10px}
+.stat-card{background:var(--surface2);border-radius:var(--radius-sm);padding:14px;display:flex;flex-direction:column;gap:6px}
+.stat-label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;font-weight:500}
+.stat-value{font-size:26px;font-weight:600;letter-spacing:-0.5px;font-family:var(--font-mono);line-height:1.1}
+.stat-subrow{display:flex;justify-content:space-between;align-items:baseline;padding-top:2px;border-top:1px solid var(--border)}
+.stat-sublabel{font-size:12px;color:var(--text3);font-weight:500}
+.stat-subval{font-size:15px;font-weight:600;font-family:var(--font-mono);letter-spacing:-0.3px}
+
+/* Spending items */
+.spending-list{display:flex;flex-direction:column}
+.spending-item{display:flex;align-items:flex-start;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);gap:12px}
+.spending-item:last-child{border-bottom:none;padding-bottom:0}
+.spending-item:first-child{padding-top:0}
+.si-main{flex:1;min-width:0}
+.si-payee{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.si-meta{font-size:12px;color:var(--text2);margin-top:2px;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.si-meta-dot{color:var(--text3)}
+.si-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
+.si-amount{font-size:15px;font-weight:600;font-family:var(--font-mono);letter-spacing:-0.3px}
+.si-del{background:none;border:none;padding:2px;color:var(--text3);cursor:pointer;display:flex;transition:color 0.15s}
+.si-del:hover{color:var(--danger)}
+.si-del svg,.del-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.user-tag{background:var(--accent-light);color:var(--accent-text);font-size:11px;padding:1px 7px;border-radius:20px;font-weight:500}
+.period-tag{background:var(--surface2);color:var(--text3);font-size:11px;padding:1px 7px;border-radius:20px;font-family:var(--font-mono)}
+
+/* Filter chips */
+.filter-row{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.filter-row::-webkit-scrollbar{display:none}
+.chip{flex-shrink:0;padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:transparent;font-size:13px;cursor:pointer;font-family:var(--font);color:var(--text2);transition:all 0.15s}
+.chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* Filter panel */
+.filter-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:12px;overflow:hidden;transition:max-height 0.28s cubic-bezier(0.4,0,0.2,1),opacity 0.2s,padding 0.28s,margin 0.28s}
+.filter-panel.collapsed{max-height:0;opacity:0;padding-top:0;padding-bottom:0;border-color:transparent;pointer-events:none;margin:0}
+.filter-panel:not(.collapsed){max-height:600px;opacity:1}
+.filter-group-label{font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px}
+.filter-toggle-bar{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.filter-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:20px;background:var(--accent);color:#fff;font-size:11px;font-weight:600;line-height:1;margin-left:4px;vertical-align:middle}
+.filter-badge.hidden{display:none}
+.filter-clear-btn{font-size:12px;color:var(--text3);background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:var(--radius-xs);font-family:var(--font);transition:color 0.15s}
+.filter-clear-btn:hover{color:var(--danger)}
+.filter-results{font-size:12px;color:var(--text3);padding:2px 0 0}
+.chip-sm{padding:4px 11px;font-size:12px}
+
+/* FAB */
+.fab{position:absolute;bottom:16px;right:16px;width:54px;height:54px;border-radius:50%;background:var(--accent);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(45,106,79,0.35);z-index:50;transition:transform 0.15s}
+.fab:active{transform:scale(0.94)}
+.fab svg{width:24px;height:24px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* Bottom sheets */
+.sheet-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:200;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.25s}
+.sheet-backdrop.open{opacity:1;pointer-events:all}
+.sheet{background:var(--surface);border-radius:20px 20px 0 0;padding:0 16px calc(24px + env(safe-area-inset-bottom));width:100%;max-width:430px;max-height:90vh;overflow-y:auto;transform:translateY(100%);transition:transform 0.3s cubic-bezier(0.32,0.72,0,1)}
+.sheet-backdrop.open .sheet{transform:translateY(0)}
+.sheet-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:14px auto 16px}
+.sheet-title{font-size:17px;font-weight:600;margin-bottom:20px;letter-spacing:-0.3px}
+
+/* Forms */
+.form-group{margin-bottom:14px}
+.form-label{font-size:13px;color:var(--text2);font-weight:500;margin-bottom:6px;display:block}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form-hint{font-size:12px;color:var(--text3);margin-top:4px}
+.amount-wrap{position:relative}
+.amount-prefix{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:18px;font-weight:600;color:var(--text2);pointer-events:none}
+.amount-input{font-size:22px;font-weight:600;font-family:var(--font-mono);text-align:right;padding:12px 14px 12px 40px;letter-spacing:-0.5px}
+.form-err{font-size:13px;color:var(--danger);margin-bottom:10px;padding:8px 12px;background:var(--danger-light);border-radius:var(--radius-xs);display:none}
+.form-err.visible{display:block}
+.form-success{font-size:13px;color:var(--accent-text);margin-bottom:10px;padding:8px 12px;background:var(--accent-light);border-radius:var(--radius-xs);display:none}
+.form-success.visible{display:block}
+
+/* Buttons */
+.btn{width:100%;padding:13px;border-radius:var(--radius-sm);border:none;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font);transition:opacity 0.15s,transform 0.15s}
+.btn:active{transform:scale(0.98)}
+.btn:disabled{opacity:0.45;cursor:not-allowed}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border);margin-top:8px}
+.btn-danger-ghost{background:transparent;color:var(--danger);border:1px solid var(--danger);margin-top:8px}
+.btn-sm{padding:7px 14px;font-size:13px;width:auto;border-radius:var(--radius-xs)}
+.btn-icon{display:flex;align-items:center;justify-content:center;gap:8px}
+
+/* Toast */
+.toast{position:fixed;bottom:calc(env(safe-area-inset-bottom) + 80px);left:50%;transform:translateX(-50%) translateY(20px);background:var(--text);color:var(--bg);padding:10px 20px;border-radius:var(--radius-sm);font-size:14px;font-weight:500;z-index:500;opacity:0;transition:all 0.25s;white-space:nowrap;pointer-events:none;max-width:90vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Login */
+.login-screen{flex:1;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--bg);overflow-y:auto}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px 24px;width:100%;max-width:340px}
+.login-logo{font-size:24px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px}
+.login-logo span{color:var(--accent)}
+.login-sub{font-size:13px;color:var(--text2);margin-bottom:24px}
+.login-tabs{display:flex;border:1px solid var(--border);border-radius:var(--radius-sm);padding:3px;margin-bottom:20px}
+.login-tab{flex:1;padding:7px;text-align:center;border-radius:var(--radius-xs);border:none;background:none;font-size:13px;font-weight:500;font-family:var(--font);color:var(--text2);cursor:pointer;transition:all 0.15s}
+.login-tab.active{background:var(--accent);color:#fff}
+
+/* Settings rows */
+.setting-item{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);gap:8px}
+.setting-item:last-child{border-bottom:none}
+.setting-name{font-size:14px;font-weight:500}
+.setting-meta{font-size:12px;color:var(--text2);margin-top:2px}
+.setting-actions{display:flex;gap:6px;align-items:center;flex-shrink:0}
+.badge{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500}
+.badge-active{background:var(--accent-light);color:var(--accent-text)}
+.badge-inactive{background:var(--surface2);color:var(--text3)}
+.badge-current{background:var(--accent);color:#fff}
+.toggle-btn{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;font-size:12px;font-weight:500;font-family:var(--font);cursor:pointer;color:var(--text2);transition:all 0.15s;white-space:nowrap}
+.toggle-btn:hover{border-color:var(--accent);color:var(--accent)}
+.del-btn{padding:4px;border-radius:var(--radius-xs);border:none;background:none;cursor:pointer;color:var(--text3);display:flex;transition:color 0.15s;flex-shrink:0}
+.del-btn:hover{color:var(--danger)}
+.edit-btn{padding:4px 10px;border-radius:var(--radius-xs);border:1px solid var(--border);background:none;cursor:pointer;color:var(--text2);font-size:12px;font-family:var(--font);transition:all 0.15s}
+.edit-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* Profile avatar */
+.avatar{width:56px;height:56px;border-radius:50%;background:var(--accent-light);color:var(--accent-text);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:600;flex-shrink:0}
+
+/* Invite code box */
+.invite-box{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px}
+.invite-code{font-family:var(--font-mono);font-size:18px;font-weight:600;letter-spacing:2px}
+.copy-btn{padding:6px 12px;border-radius:var(--radius-xs);border:1px solid var(--border);background:var(--surface);font-size:12px;font-weight:500;font-family:var(--font);cursor:pointer;color:var(--text2);transition:all 0.15s;white-space:nowrap;flex-shrink:0}
+.copy-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* Net dot */
+.net-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0;transition:background 0.3s}
+.net-dot.warn{background:var(--warn)}
+.net-dot.err{background:var(--danger)}
+
+/* Empty */
+.empty{text-align:center;padding:32px 0;color:var(--text3);font-size:14px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.empty svg{width:36px;height:36px;stroke:var(--border);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.badge-credit{background:var(--warn-light);color:var(--warn)}
+.credit-tag{background:var(--warn-light);color:var(--warn);font-size:11px;padding:1px 7px;border-radius:20px;font-weight:500}
+.divider{height:1px;background:var(--border);margin:4px 0}
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ══════════════════════════════════════════
+     LOGIN SCREEN
+══════════════════════════════════════════ -->
+<div class="screen active" id="screen-login">
+  <div class="login-screen">
+    <div class="login-card">
+      <div class="login-logo">House<span>hold</span></div>
+      <div class="login-sub">Home spending ledger</div>
+      <div class="login-tabs">
+        <button class="login-tab active" id="tab-login" onclick="switchAuthTab('login')">Sign in</button>
+        <button class="login-tab" id="tab-register" onclick="switchAuthTab('register')">Register</button>
+      </div>
+      <!-- Login -->
+      <div id="login-form">
+        <div class="form-group">
+          <label class="form-label" for="l-user">Username</label>
+          <input id="l-user" type="text" autocomplete="username" placeholder="your username"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="l-pass">Password</label>
+          <input id="l-pass" type="password" autocomplete="current-password" placeholder="••••••"/>
+        </div>
+        <div class="form-err" id="login-err"></div>
+        <button class="btn btn-primary" id="login-btn" onclick="doLogin()">Sign in</button>
+      </div>
+      <!-- Register -->
+      <div id="register-form" style="display:none">
+        <div class="form-group">
+          <label class="form-label">Username</label>
+          <input id="r-user" type="text" autocomplete="username" placeholder="min. 3 characters"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input id="r-pass" type="password" placeholder="min. 6 characters"/>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Name</label>
+            <input id="r-name" type="text" placeholder="Full name"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nickname</label>
+            <input id="r-nick" type="text" placeholder="e.g. Yusuf"/>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Invite code</label>
+          <input id="r-invite" type="text" placeholder="Required to register"/>
+        </div>
+        <div class="form-err" id="reg-err"></div>
+        <button class="btn btn-primary" id="reg-btn" onclick="doRegister()">Create account</button>
+      </div>
+      <div id="net-status-login" style="text-align:center;margin-top:14px;font-size:12px;color:var(--text3)">Locating server…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     MAIN APP SCREEN
+══════════════════════════════════════════ -->
+<div class="screen" id="screen-main">
+  <div class="topbar">
+    <div class="topbar-brand">House<span>hold</span></div>
+    <div class="topbar-actions">
+      <div class="net-dot" id="net-dot"></div>
+      <span style="font-size:13px;color:var(--text2);margin:0 8px;font-weight:500" id="topbar-user"></span>
+      <button class="icon-btn" onclick="doLogout()" title="Sign out">
+        <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="tab-wrap">
+
+    <!-- ── Dashboard ── -->
+    <div class="tab-content active" id="tab-dashboard">
+      <div class="content">
+        <!-- Period selector -->
+        <div style="display:flex;align-items:center;gap:8px">
+          <select id="period-select" onchange="onPeriodSelectChange()" style="flex:1;font-size:13px;padding:8px 10px;font-weight:500"></select>
+          <button class="btn btn-ghost btn-sm" onclick="jumpPeriod('current')" title="Current period" style="flex-shrink:0;white-space:nowrap">Now</button>
+          <button class="btn btn-ghost btn-sm" onclick="jumpPeriod('prev')" title="Previous period" style="flex-shrink:0;white-space:nowrap">Prev</button>
+        </div>
+        <div id="period-banner"></div>
+        <div class="stats-grid" style="grid-template-columns:1fr">
+          <!-- Card 1: Current Period -->
+          <div class="stat-card">
+            <div class="stat-label" style="display:flex;align-items:center;justify-content:space-between">
+              <span id="stat-period-label">Current period</span>
+              <button id="prev-period-toggle" onclick="togglePrevPeriod()" title="Toggle previous period credit" style="display:flex;align-items:center;gap:5px;background:none;border:1px solid var(--border);border-radius:20px;padding:2px 9px 2px 7px;font-size:11px;font-weight:500;color:var(--text3);cursor:pointer;font-family:var(--font);transition:all 0.15s;white-space:nowrap">
+                <svg id="prev-period-toggle-icon" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:opacity 0.15s" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <span id="prev-period-toggle-label">Prev</span>
+              </button>
+            </div>
+            <div class="stat-value" id="stat-period">—</div>
+            <div class="stat-subrow">
+              <span class="stat-sublabel">Cash</span>
+              <span class="stat-subval" id="stat-cash">—</span>
+            </div>
+            <div class="stat-subrow">
+              <span class="stat-sublabel" style="color:var(--warn)">Credit</span>
+              <span class="stat-subval" style="color:var(--warn)" id="stat-credit">—</span>
+            </div>
+            <div class="stat-subrow" id="stat-period-prev-row">
+              <span class="stat-sublabel" style="color:var(--warn)" id="stat-period-prev-label">Prev. credit</span>
+              <span class="stat-subval" style="color:var(--warn)" id="stat-period-prev">Rs 0</span>
+            </div>
+          </div>
+          <!-- Card 2: Today / Filter -->
+          <div class="stat-card">
+            <div class="stat-label" id="stat-today-label">Today</div>
+            <div class="stat-value" id="stat-today">—</div>
+            <div class="stat-subrow">
+              <span class="stat-sublabel">Cash</span>
+              <span class="stat-subval" id="stat-today-cash">—</span>
+            </div>
+            <div class="stat-subrow">
+              <span class="stat-sublabel" style="color:var(--warn)">Credit</span>
+              <span class="stat-subval" style="color:var(--warn)" id="stat-today-credit">—</span>
+            </div>
+          </div>
+        </div>
+        <!-- Filter toggle bar -->
+        <div class="filter-toggle-bar">
+          <button id="filter-toggle-btn" onclick="toggleFilterPanel()" style="display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 13px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;font-family:var(--font);transition:border-color 0.15s,color 0.15s">
+            <svg style="width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+            Filters<span class="filter-badge hidden" id="filter-active-count"></span>
+          </button>
+          <span id="filter-result-count" class="filter-results"></span>
+        </div>
+
+        <!-- Collapsible filter panel -->
+        <div class="filter-panel collapsed" id="filter-panel">
+
+          <!-- Who -->
+          <div>
+            <div class="filter-group-label">Who</div>
+            <div class="filter-row" id="filter-who-row">
+              <button class="chip chip-sm active" data-group="who" data-val="all"  onclick="setFilterChip(this,'who','all')">Everyone</button>
+              <button class="chip chip-sm"        data-group="who" data-val="mine" onclick="setFilterChip(this,'who','mine')">Mine</button>
+            </div>
+          </div>
+
+          <!-- Type -->
+          <div>
+            <div class="filter-group-label">Type</div>
+            <div class="filter-row" id="filter-type-row">
+              <button class="chip chip-sm active" data-group="type" data-val="all"    onclick="setFilterChip(this,'type','all')">All</button>
+              <button class="chip chip-sm"        data-group="type" data-val="cash"   onclick="setFilterChip(this,'type','cash')">Cash</button>
+              <button class="chip chip-sm"        data-group="type" data-val="credit" onclick="setFilterChip(this,'type','credit')">Credit</button>
+            </div>
+          </div>
+
+          <!-- Payee -->
+          <div>
+            <div class="filter-group-label">Payee</div>
+            <div class="filter-row" id="filter-payee-row"></div>
+          </div>
+
+          <!-- Payment mode -->
+          <div>
+            <div class="filter-group-label">Payment mode</div>
+            <div class="filter-row" id="filter-mode-row"></div>
+          </div>
+
+          <button class="filter-clear-btn" onclick="clearAllFilters()" style="align-self:flex-start;padding-left:0">✕ Clear all filters</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            <span>Spendings</span>
+            <span class="sync-time" id="last-sync"></span>
+          </div>
+          <div class="spending-list" id="spending-list"></div>
+        </div>
+      </div>
+      <button class="fab" id="fab" onclick="openAddSpending()" aria-label="Add spending">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+    </div>
+
+    <!-- ── Payees ── -->
+    <div class="tab-content" id="tab-payees">
+      <div class="content">
+        <div class="card">
+          <div class="card-title">
+            <span>Payees</span>
+            <button class="btn btn-primary btn-sm" onclick="openAddPayee()">+ Add</button>
+          </div>
+          <div id="payees-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Payment Modes ── -->
+    <div class="tab-content" id="tab-modes">
+      <div class="content">
+        <div class="card">
+          <div class="card-title">
+            <span>Payment modes</span>
+            <button class="btn btn-primary btn-sm" onclick="openAddMode()">+ Add</button>
+          </div>
+          <div id="modes-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Periods ── -->
+    <div class="tab-content" id="tab-periods">
+      <div class="content">
+        <div class="card">
+          <div class="card-title">
+            <span>Periods</span>
+            <button class="btn btn-primary btn-sm" onclick="openAddPeriod()">+ Add</button>
+          </div>
+          <div id="periods-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Account ── -->
+    <div class="tab-content" id="tab-settings">
+      <div class="content">
+
+        <!-- Profile card -->
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+            <div class="avatar" id="profile-avatar">?</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:17px;font-weight:600;letter-spacing:-0.3px" id="profile-name">—</div>
+              <div style="font-size:13px;color:var(--text2)" id="profile-username">—</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:2px" id="profile-email"></div>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-icon" onclick="openSheet('sheet-profile')">
+            <svg style="width:16px;height:16px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Edit profile
+          </button>
+        </div>
+
+        <!-- Invite code card -->
+        <div class="card">
+          <div class="card-title">Household invite code</div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Share this code to let others join your household.</div>
+          <div id="invite-area">
+            <button class="btn btn-ghost btn-icon" id="show-invite-btn" onclick="showInviteCode()">
+              <svg style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              Reveal invite code
+            </button>
+          </div>
+        </div>
+
+        <!-- Network card -->
+        <div class="card">
+          <div class="card-title">Network</div>
+          <div class="setting-item">
+            <div>
+              <div style="font-size:13px;font-family:var(--font-mono);word-break:break-all" id="s-network">—</div>
+              <div class="setting-meta">Active server</div>
+            </div>
+            <div class="net-dot" id="net-dot2"></div>
+          </div>
+          <div class="setting-item" style="padding:6px 0 2px;border:none">
+            <span style="font-size:13px;color:var(--text2)">Local</span>
+            <span style="font-size:12px;color:var(--text3);font-family:var(--font-mono)">192.168.8.3:8001</span>
+          </div>
+          <div class="setting-item" style="padding:2px 0 0;border:none">
+            <span style="font-size:13px;color:var(--text2)">Remote</span>
+            <span style="font-size:12px;color:var(--text3);font-family:var(--font-mono)">vpn.neerooayusuf.com:8001</span>
+          </div>
+        </div>
+
+        <!-- About + sign out -->
+        <div class="card">
+          <div class="setting-item">
+            <div class="setting-name">Household Ledger</div>
+            <div style="font-size:12px;color:var(--text3)">v2.3.0</div>
+          </div>
+          <div class="setting-item" style="border:none;padding-bottom:0">
+            <div style="font-size:13px;color:var(--text2)">Raspberry Pi 4</div>
+            <button class="toggle-btn" onclick="doLogout()">Sign out</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /tab-wrap -->
+
+  <nav class="bottomnav">
+    <button class="nav-item active" id="nav-dashboard" onclick="switchTab('dashboard')">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Dashboard
+    </button>
+    <button class="nav-item" id="nav-payees" onclick="switchTab('payees')">
+      <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Payees
+    </button>
+    <button class="nav-item" id="nav-modes" onclick="switchTab('modes')">
+      <svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+      Modes
+    </button>
+    <button class="nav-item" id="nav-periods" onclick="switchTab('periods')">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Periods
+    </button>
+    <button class="nav-item" id="nav-settings" onclick="switchTab('settings')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/></svg>
+      Account
+    </button>
+  </nav>
+</div><!-- /screen-main -->
+
+</div><!-- /app -->
+
+<!-- ══════════════════════════════════════════
+     SHEETS
+══════════════════════════════════════════ -->
+
+<!-- Add/Edit Spending -->
+<div class="sheet-backdrop" id="sheet-spending">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title" id="spending-sheet-title">New spending</div>
+    <div class="form-group">
+      <label class="form-label">Amount</label>
+      <div class="amount-wrap">
+        <span class="amount-prefix">Rs</span>
+        <input class="amount-input" id="f-amount" type="number" min="0" step="0.01" placeholder="0.00" inputmode="decimal"/>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Payee</label>
+        <select id="f-payee"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Payment mode</label>
+        <select id="f-mode"></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Assign to</label>
+        <select id="f-user"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input id="f-date" type="date"/>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description <span style="color:var(--text3);font-size:11px">(optional)</span></label>
+      <input id="f-desc" type="text" placeholder="e.g. Weekly groceries"/>
+    </div>
+    <div class="form-err" id="spending-err"></div>
+    <button class="btn btn-primary" id="spending-save-btn" onclick="saveSpending()">Save spending</button>
+    <button class="btn btn-ghost" onclick="closeSheet('sheet-spending')">Cancel</button>
+  </div>
+</div>
+
+<!-- Add/Edit Payee -->
+<div class="sheet-backdrop" id="sheet-payee">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title" id="payee-sheet-title">Add payee</div>
+    <div class="form-group">
+      <label class="form-label">Payee name</label>
+      <input id="p-name" type="text" placeholder="e.g. Super U" maxlength="100"/>
+    </div>
+    <div class="form-err" id="payee-err"></div>
+    <button class="btn btn-primary" id="payee-save-btn" onclick="savePayee()">Add payee</button>
+    <button class="btn btn-ghost" onclick="closeSheet('sheet-payee')">Cancel</button>
+  </div>
+</div>
+
+<!-- Add/Edit Payment Mode -->
+<div class="sheet-backdrop" id="sheet-mode">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title" id="mode-sheet-title">Add payment mode</div>
+    <div class="form-group">
+      <label class="form-label">Name</label>
+      <input id="m-name" type="text" placeholder="e.g. Cash" maxlength="50"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description <span style="color:var(--text3);font-size:11px">(optional)</span></label>
+      <input id="m-desc" type="text" placeholder="e.g. Physical cash payments"/>
+    </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none">
+        <input id="m-credit" type="checkbox" style="width:18px;height:18px;accent-color:var(--warn);flex-shrink:0"/>
+        <div>
+          <div class="form-label" style="margin:0">Credit payment mode</div>
+          <div style="font-size:12px;color:var(--text3)">Spendings using this mode count as credit</div>
+        </div>
+      </label>
+    </div>
+    <div class="form-err" id="mode-err"></div>
+    <button class="btn btn-primary" id="mode-save-btn" onclick="saveMode()">Add mode</button>
+    <button class="btn btn-ghost" onclick="closeSheet('sheet-mode')">Cancel</button>
+  </div>
+</div>
+
+<!-- Add/Edit Period -->
+<div class="sheet-backdrop" id="sheet-period">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title" id="period-sheet-title">Add period</div>
+    <div class="form-group">
+      <label class="form-label">Period code</label>
+      <input id="pr-code" type="text" placeholder="MMYYYY e.g. 052026" maxlength="6" pattern="[0-9]{6}"
+             oninput="this.value=this.value.replace(/\D/g,'').slice(0,6);autofillPeriodStart()"/>
+      <div class="form-hint">Format: month (2 digits) + year (4 digits)</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Starting date</label>
+      <input id="pr-start" type="date"/>
+    </div>
+    <div class="form-err" id="period-err"></div>
+    <button class="btn btn-primary" id="period-save-btn" onclick="savePeriod()">Save period</button>
+    <button class="btn btn-ghost" onclick="closeSheet('sheet-period')">Cancel</button>
+  </div>
+</div>
+
+<!-- Edit Profile -->
+<div class="sheet-backdrop" id="sheet-profile">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Edit profile</div>
+    <div class="form-group">
+      <label class="form-label">Name</label>
+      <input id="prof-name" type="text" placeholder="Your full name" maxlength="100"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nickname</label>
+      <input id="prof-nick" type="text" placeholder="Short name shown in the app" maxlength="50"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Email <span style="color:var(--text3);font-size:11px">(optional)</span></label>
+      <input id="prof-email" type="email" placeholder="you@example.com"/>
+    </div>
+    <div class="divider" style="margin:4px 0 14px"></div>
+    <div style="font-size:13px;font-weight:500;color:var(--text2);margin-bottom:12px">Change password</div>
+    <div class="form-group">
+      <label class="form-label">New password <span style="color:var(--text3);font-size:11px">(leave blank to keep current)</span></label>
+      <input id="prof-pass" type="password" placeholder="min. 6 characters" autocomplete="new-password"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Confirm new password</label>
+      <input id="prof-pass2" type="password" placeholder="repeat new password" autocomplete="new-password"/>
+    </div>
+    <div class="form-err" id="profile-err"></div>
+    <div class="form-success" id="profile-success">Profile updated successfully.</div>
+    <button class="btn btn-primary" id="profile-save-btn" onclick="saveProfile()">Save changes</button>
+    <button class="btn btn-ghost" onclick="closeSheet('sheet-profile')">Cancel</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const LOCAL_URL  = 'https://192.168.8.3';
+const REMOTE_URL = 'https://vpn.neerooayusuf.com';
+const PROBE_MS   = 1000;
+const POLL_MS    = 5000;
+
+let baseUrl       = localStorage.getItem('hs_net')   || null;
+let token         = localStorage.getItem('hs_token') || null;
+let currentUser   = JSON.parse(localStorage.getItem('hs_user') || 'null');
+let allSpendings  = [];
+let payees        = [];
+let paymentModes  = [];
+let users         = [];   // all household users for the "assign to" dropdown
+let periods       = [];
+let currentPeriod = null;
+let lastPollTime  = null;
+let pollTimer     = null;
+let activeFilter  = 'all';  // legacy — kept for compat, not used by new filter logic
+let activeFilters = { who: 'all', type: 'all', payeeId: null, modeId: null };
+let filterPanelOpen = false;
+let editingPeriodId = null;
+let editingPayeeId  = null;
+let editingModeId   = null;
+let selectedPeriod  = null;  // the period currently shown on dashboard (may differ from currentPeriod)
+
+// ── Network ──────────────────────────────────────────────
+async function probeUrl(url) {
+  try {
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), PROBE_MS);
+    const r    = await fetch(url + '/status', {signal: ctrl.signal});
+    clearTimeout(tid);
+    return r.ok;
+  } catch { return false; }
+}
+
+async function resolveNet(silent) {
+  if (!silent) setNetStatus('Locating server…');
+  const preferred  = baseUrl;
+  const other      = preferred === LOCAL_URL ? REMOTE_URL : LOCAL_URL;
+  const candidates = preferred ? [preferred, other] : [LOCAL_URL, REMOTE_URL];
+  for (const url of candidates) {
+    if (await probeUrl(url)) {
+      baseUrl = url;
+      localStorage.setItem('hs_net', url);
+      if (!silent) setNetStatus(url === LOCAL_URL ? '🏠 Local network' : '🌐 Remote (VPN)');
+      setDot('ok');
+      updateNetSettings();
+      return true;
+    }
+  }
+  if (!silent) setNetStatus('Server unreachable');
+  setDot('err');
+  return false;
+}
+
+function setNetStatus(msg) { const e = document.getElementById('net-status-login'); if (e) e.textContent = msg; }
+function setDot(state) {
+  ['net-dot','net-dot2'].forEach(id => {
+    const d = document.getElementById(id); if (!d) return;
+    d.className = 'net-dot' + (state==='ok' ? '' : state==='warn' ? ' warn' : ' err');
+  });
+}
+function updateNetSettings() { const e = document.getElementById('s-network'); if (e) e.textContent = baseUrl || '—'; }
+
+// ── API helper ───────────────────────────────────────────
+async function api(path, opts = {}) {
+  const headers = {'Content-Type': 'application/json', ...(opts.headers || {})};
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  let res;
+  try {
+    res = await fetch(baseUrl + path, {...opts, headers});
+  } catch {
+    setDot('warn');
+    const ok = await resolveNet(true);
+    if (!ok) throw new Error('Server unreachable');
+    headers['Authorization'] = 'Bearer ' + token;
+    res = await fetch(baseUrl + path, {...opts, headers});
+  }
+  const nt = res.headers.get('X-Refresh-Token');
+  if (nt) { token = nt; localStorage.setItem('hs_token', nt); }
+  return res;
+}
+
+// ── Auth ─────────────────────────────────────────────────
+function switchAuthTab(tab) {
+  document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+  document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+  document.getElementById('login-form').style.display    = tab === 'login'    ? '' : 'none';
+  document.getElementById('register-form').style.display = tab === 'register' ? '' : 'none';
+}
+
+async function doLogin() {
+  const u   = document.getElementById('l-user').value.trim();
+  const p   = document.getElementById('l-pass').value;
+  const err = document.getElementById('login-err');
+  err.classList.remove('visible');
+  if (!u || !p) { showErr(err, 'Enter username and password.'); return; }
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  try {
+    const body = new URLSearchParams({username: u, password: p});
+    const res  = await fetch(baseUrl + '/auth/login', {
+      method: 'POST', body,
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'}
+    });
+    if (!res.ok) { showErr(err, 'Invalid username or password.'); return; }
+    const data = await res.json();
+    token = data.access_token;
+    localStorage.setItem('hs_token', token);
+    // Login response wraps user inside a 'user' key: { access_token, token_type, user: {...} }
+    const ud = data.user || data;  // fall back to flat shape for older API versions
+    if (ud && ud.id) {
+      currentUser = {id: ud.id, username: ud.username, name: ud.name, nickname: ud.nickname, email: ud.email || null};
+      localStorage.setItem('hs_user', JSON.stringify(currentUser));
+    }
+    await bootApp();
+  } catch { showErr(err, 'Connection error.'); }
+  finally { btn.disabled = false; btn.textContent = 'Sign in'; }
+}
+
+async function doRegister() {
+  const err = document.getElementById('reg-err');
+  err.classList.remove('visible');
+  const payload = {
+    username:    document.getElementById('r-user').value.trim(),
+    password:    document.getElementById('r-pass').value,
+    name:        document.getElementById('r-name').value.trim() || null,
+    nickname:    document.getElementById('r-nick').value.trim() || null,
+    invite_code: document.getElementById('r-invite').value.trim()
+  };
+  if (payload.username.length < 3) { showErr(err, 'Username must be at least 3 characters.'); return; }
+  if (payload.password.length < 6) { showErr(err, 'Password must be at least 6 characters.'); return; }
+  if (!payload.invite_code)         { showErr(err, 'Invite code is required.'); return; }
+  const btn = document.getElementById('reg-btn');
+  btn.disabled = true; btn.textContent = 'Creating account…';
+  try {
+    const res = await fetch(baseUrl + '/auth/register', {
+      method: 'POST', body: JSON.stringify(payload),
+      headers: {'Content-Type': 'application/json'}
+    });
+    if (res.status === 201) {
+      showToast('Account created! Sign in now.');
+      switchAuthTab('login');
+      document.getElementById('l-user').value = payload.username;
+    } else {
+      const d = await res.json().catch(() => ({}));
+      showErr(err, d.detail || 'Registration failed.');
+    }
+  } catch { showErr(err, 'Connection error.'); }
+  finally { btn.disabled = false; btn.textContent = 'Create account'; }
+}
+
+function doLogout() {
+  token = null; currentUser = null;
+  allSpendings = []; periods = []; currentPeriod = null; lastPollTime = null;
+  if (pollTimer) clearInterval(pollTimer); pollTimer = null;
+  localStorage.removeItem('hs_token'); localStorage.removeItem('hs_user');
+  showScreen('login');
+  document.getElementById('l-user').value = '';
+  document.getElementById('l-pass').value = '';
+}
+
+// ── Boot ─────────────────────────────────────────────────
+async function bootApp() {
+  try {
+    const [pr, mr, ur, perr] = await Promise.all([
+      api('/payees?include_inactive=true'),
+      api('/payment-modes?include_inactive=true'),
+      api('/auth/users/lookup'),
+      api('/periods')
+    ]);
+    if ([pr, mr, ur, perr].some(r => r.status === 401)) { doLogout(); return; }
+    payees       = await pr.json();
+    paymentModes = await mr.json();
+    users        = await ur.json();
+    periods      = await perr.json();
+
+    // If login didn't return user data, try to identify currentUser from the lookup list
+    // (this covers the token-restored-from-localStorage path)
+    if (!currentUser && users.length) {
+      // Try to match by stored ID first
+      const storedId = JSON.parse(localStorage.getItem('hs_user') || 'null')?.id;
+      currentUser = (storedId && users.find(u => u.id === storedId)) || users[0];
+      localStorage.setItem('hs_user', JSON.stringify(currentUser));
+    } else if (currentUser && users.length) {
+      // Refresh user data from lookup (gets latest name/nickname)
+      const fresh = users.find(u => u.id === currentUser.id);
+      if (fresh) {
+        currentUser = {...currentUser, name: fresh.name, nickname: fresh.nickname};
+        localStorage.setItem('hs_user', JSON.stringify(currentUser));
+      }
+    }
+
+    resolvCurrentPeriod();
+    selectedPeriod = currentPeriod;  // default dashboard view = current period
+    refreshProfileUI();
+    applyPrevPeriodToggleUI();
+    populateForms();
+    buildFilterChips();
+    populatePeriodSelect();
+    renderPayees();
+    renderModes();
+    renderPeriods();
+    renderPeriodBanner();
+    showScreen('main');
+    await fetchSpendings(true);
+    startPoll();
+    setDot('ok');
+    updateNetSettings();
+  } catch (e) {
+    console.error(e);
+    showErr(document.getElementById('login-err'), 'Failed to load data. Check connection.');
+  }
+}
+
+// ── Profile UI ───────────────────────────────────────────
+function refreshProfileUI() {
+  if (!currentUser) return;
+  const display = currentUser.nickname || currentUser.name || currentUser.username || '?';
+  const initial = display.charAt(0).toUpperCase();
+
+  // Topbar — show nickname or name
+  setText('topbar-user', display);
+
+  // Account tab
+  setText('profile-avatar',   initial);
+  setText('profile-name',     currentUser.name || currentUser.username || '—');
+  setText('profile-username', '@' + (currentUser.username || ''));
+  setText('profile-email',    currentUser.email || '');
+}
+
+function openProfileSheet() {
+  if (!currentUser) return;
+  document.getElementById('prof-name').value  = currentUser.name     || '';
+  document.getElementById('prof-nick').value  = currentUser.nickname || '';
+  document.getElementById('prof-email').value = currentUser.email    || '';
+  document.getElementById('prof-pass').value  = '';
+  document.getElementById('prof-pass2').value = '';
+  document.getElementById('profile-err').classList.remove('visible');
+  document.getElementById('profile-success').classList.remove('visible');
+  openSheet('sheet-profile');
+}
+
+async function saveProfile() {
+  const err  = document.getElementById('profile-err');
+  const succ = document.getElementById('profile-success');
+  err.classList.remove('visible');
+  succ.classList.remove('visible');
+
+  const name     = document.getElementById('prof-name').value.trim()  || null;
+  const nickname = document.getElementById('prof-nick').value.trim()  || null;
+  const email    = document.getElementById('prof-email').value.trim() || null;
+  const pass     = document.getElementById('prof-pass').value;
+  const pass2    = document.getElementById('prof-pass2').value;
+
+  if (pass && pass.length < 6)  { showErr(err, 'Password must be at least 6 characters.'); return; }
+  if (pass && pass !== pass2)   { showErr(err, 'Passwords do not match.'); return; }
+
+  const payload = {name, nickname, email, password: pass || null};
+
+  const btn = document.getElementById('profile-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const res = await api('/auth/profile', {method: 'PUT', body: JSON.stringify(payload)});
+    if (res.ok) {
+      const updated = await res.json();
+      // Merge updated fields back into currentUser
+      currentUser = {...currentUser, ...updated};
+      localStorage.setItem('hs_user', JSON.stringify(currentUser));
+      refreshProfileUI();
+      succ.classList.add('visible');
+      showToast('Profile updated ✓');
+      // Clear password fields after success
+      document.getElementById('prof-pass').value  = '';
+      document.getElementById('prof-pass2').value = '';
+    } else {
+      const d = await res.json().catch(() => ({}));
+      showErr(err, d.detail || 'Update failed.');
+    }
+  } catch { showErr(err, 'Connection error.'); }
+  finally { btn.disabled = false; btn.textContent = 'Save changes'; }
+}
+
+// ── Invite code ──────────────────────────────────────────
+async function showInviteCode() {
+  const area = document.getElementById('invite-area');
+  area.innerHTML = '<div style="font-size:13px;color:var(--text3)">Loading…</div>';
+  try {
+    const res = await api('/auth/invite-code');
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    const code = data.invite_code;
+    area.innerHTML = `
+      <div class="invite-box">
+        <span class="invite-code">${esc(code)}</span>
+        <button class="copy-btn" onclick="copyInvite('${esc(code)}')">Copy</button>
+      </div>
+      <button class="btn btn-ghost" style="margin-top:10px" onclick="hideInviteCode()">Hide</button>`;
+  } catch {
+    area.innerHTML = `<div style="font-size:13px;color:var(--danger)">Failed to load invite code.</div>
+      <button class="btn btn-ghost" style="margin-top:8px" onclick="restoreInviteBtn()">Try again</button>`;
+  }
+}
+
+function hideInviteCode() { restoreInviteBtn(); }
+function restoreInviteBtn() {
+  document.getElementById('invite-area').innerHTML = `
+    <button class="btn btn-ghost btn-icon" id="show-invite-btn" onclick="showInviteCode()">
+      <svg style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      Reveal invite code
+    </button>`;
+}
+
+async function copyInvite(code) {
+  try { await navigator.clipboard.writeText(code); showToast('Copied to clipboard ✓'); }
+  catch { showToast('Copy: ' + code); }
+}
+
+// ── Period logic ─────────────────────────────────────────
+function resolvCurrentPeriod() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const eligible = periods
+    .filter(p => new Date(p.starting_date + 'T00:00:00') <= today)
+    .sort((a, b) => new Date(b.starting_date) - new Date(a.starting_date));
+  currentPeriod = eligible[0] || null;
+}
+
+function periodDateRange(p) {
+  const sorted = [...periods].sort((a,b) => new Date(a.starting_date) - new Date(b.starting_date));
+  const idx = sorted.findIndex(x => x.id === p.id);
+  const start = p.starting_date;
+  if (idx < sorted.length - 1) {
+    const nextStart = new Date(sorted[idx+1].starting_date + 'T00:00:00');
+    nextStart.setDate(nextStart.getDate() - 1);
+    return {start, end: nextStart.toISOString().slice(0,10)};
+  }
+  return {start, end: null};
+}
+
+function fmtPeriodCode(code) {
+  if (!code || code.length !== 6) return code;
+  const mm = parseInt(code.slice(0,2), 10);
+  const yyyy = code.slice(2);
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return (months[mm-1] || code.slice(0,2)) + ' ' + yyyy;
+}
+
+function populatePeriodSelect() {
+  const sel = document.getElementById('period-select');
+  if (!sel) return;
+  const sorted = [...periods].sort((a,b) => new Date(b.starting_date) - new Date(a.starting_date));
+  sel.innerHTML = '';
+  if (!sorted.length) {
+    const o = document.createElement('option'); o.textContent = 'No periods'; sel.appendChild(o); return;
+  }
+  sorted.forEach(p => {
+    const o = document.createElement('option'); o.value = p.id;
+    o.textContent = fmtPeriodCode(p.period);
+    if (currentPeriod && p.id === currentPeriod.id) o.textContent += ' (current)';
+    sel.appendChild(o);
+  });
+  // Set selected value to selectedPeriod
+  if (selectedPeriod) sel.value = selectedPeriod.id;
+  else if (currentPeriod) sel.value = currentPeriod.id;
+}
+
+function onPeriodSelectChange() {
+  const sel = document.getElementById('period-select');
+  const pid = parseInt(sel.value);
+  selectedPeriod = periods.find(p => p.id === pid) || null;
+  renderPeriodBanner();
+  fetchSpendings(true);
+}
+
+function jumpPeriod(which) {
+  const sorted = [...periods].sort((a,b) => new Date(b.starting_date) - new Date(a.starting_date));
+  if (!sorted.length) return;
+  if (which === 'current') {
+    selectedPeriod = currentPeriod || sorted[0];
+  } else {
+    // previous = one step earlier than selectedPeriod (or currentPeriod)
+    const base = selectedPeriod || currentPeriod || sorted[0];
+    const idx  = sorted.findIndex(p => p.id === base.id);
+    selectedPeriod = sorted[idx + 1] || sorted[sorted.length - 1];
+  }
+  populatePeriodSelect();
+  renderPeriodBanner();
+  fetchSpendings(true);
+}
+
+function renderPeriodBanner() {
+  const el = document.getElementById('period-banner');
+  if (!el) return;
+  const p = selectedPeriod || currentPeriod;
+  if (!p) {
+    el.innerHTML = `<div style="background:var(--warn-light);border:1px solid var(--warn);border-radius:var(--radius);padding:12px 16px;color:var(--warn);font-size:13px">
+      <strong>No active period.</strong> Add a period in the Periods tab.
+    </div>`;
+    return;
+  }
+  const range    = periodDateRange(p);
+  const endLabel = range.end ? fmtDate(range.end) : 'ongoing';
+  const isCurrentP = currentPeriod && p.id === currentPeriod.id;
+  el.innerHTML   = `<div class="period-banner">
+    <div>
+      <div class="period-banner-label">${isCurrentP ? 'Current period' : 'Viewing period'}</div>
+      <div class="period-banner-name">${esc(fmtPeriodCode(p.period))}</div>
+      <div class="period-banner-dates">${fmtDate(range.start)} — ${endLabel}</div>
+    </div>
+  </div>`;
+}
+
+// ── Screen / Tab routing ─────────────────────────────────
+function showScreen(name) {
+  document.getElementById('screen-login').classList.toggle('active', name === 'login');
+  document.getElementById('screen-main').classList.toggle('active', name === 'main');
+}
+
+function switchTab(name) {
+  ['dashboard','payees','modes','periods','settings'].forEach(t => {
+    const tc = document.getElementById('tab-' + t);
+    const ni = document.getElementById('nav-' + t);
+    if (tc) tc.classList.toggle('active', t === name);
+    if (ni) ni.classList.toggle('active', t === name);
+  });
+  const fab = document.getElementById('fab');
+  if (fab) fab.style.display = name === 'dashboard' ? 'flex' : 'none';
+}
+
+// ── Form population ──────────────────────────────────────
+function populateForms() {
+  const fp = document.getElementById('f-payee');
+  fp.innerHTML = '<option value="">— none —</option>';
+  payees.filter(p => p.is_active).forEach(p => {
+    const o = document.createElement('option'); o.value = p.id; o.textContent = p.name; fp.appendChild(o);
+  });
+  const fm = document.getElementById('f-mode');
+  fm.innerHTML = '<option value="">— none —</option>';
+  paymentModes.filter(m => m.is_active).forEach(m => {
+    const o = document.createElement('option'); o.value = m.id; o.textContent = m.name; fm.appendChild(o);
+  });
+  // Assign-to: all household users, current user selected by default
+  const fu = document.getElementById('f-user');
+  fu.innerHTML = '';
+  users.forEach(u => {
+    const o = document.createElement('option'); o.value = u.id;
+    o.textContent = u.nickname || u.name || ('User ' + u.id);
+    if (currentUser && u.id === currentUser.id) o.selected = true;
+    fu.appendChild(o);
+  });
+}
+
+// ── Spendings ────────────────────────────────────────────
+async function fetchSpendings(full = false) {
+  try {
+    const viewPeriod = selectedPeriod || currentPeriod;
+    let url = '/spendings';
+    if (viewPeriod) url += '?period_id=' + viewPeriod.id;
+    const res = await api(url);
+    if (res.status === 401) { doLogout(); return; }
+    const data = await res.json();
+    allSpendings = data.filter(s => !s.is_deleted);
+    allSpendings.sort((a,b) => new Date(b.date_incurred) - new Date(a.date_incurred) || new Date(b.created_at) - new Date(a.created_at));
+    lastPollTime = new Date().toISOString();
+    renderSpendings();
+    updateStats();
+    const ls = document.getElementById('last-sync');
+    if (ls) ls.textContent = 'Synced ' + new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    setDot('ok');
+  } catch { setDot('warn'); }
+}
+
+function startPoll() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(() => fetchSpendings(true), POLL_MS);
+}
+
+let editingSpendingId = null;
+
+function renderSpendings() {
+  const list = document.getElementById('spending-list');
+  if (!list) return;
+  let items = [...allSpendings];
+
+  // Who
+  if (activeFilters.who === 'mine') items = items.filter(s => currentUser && s.user_id === currentUser.id);
+
+  // Type
+  if (activeFilters.type === 'cash')   items = items.filter(s => !isSpendingCredit(s));
+  if (activeFilters.type === 'credit') items = items.filter(s =>  isSpendingCredit(s));
+
+  // Payee
+  if (activeFilters.payeeId !== null) items = items.filter(s => s.payee_id === activeFilters.payeeId);
+
+  // Mode
+  if (activeFilters.modeId !== null) items = items.filter(s => s.payment_mode_id === activeFilters.modeId);
+
+  // Result count label
+  const countEl = document.getElementById('filter-result-count');
+  if (countEl) {
+    const total = allSpendings.length;
+    countEl.textContent = items.length < total ? `${items.length} of ${total}` : '';
+  }
+
+  if (!items.length) {
+    list.innerHTML = '<div class="empty"><svg viewBox="0 0 24 24"><path d="M3 3h18v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3z"/><path d="M3 7h18"/></svg>No spendings match filters</div>';
+    return;
+  }
+  list.innerHTML = items.map(s => {
+    const credit = isSpendingCredit(s);
+    return `
+    <div class="spending-item">
+      <div class="si-main">
+        <div class="si-payee">${esc(payeeName(s.payee_id))}</div>
+        <div class="si-meta">
+          <span>${fmtDate(s.date_incurred)}</span>
+          ${s.payment_mode_id ? `<span class="si-meta-dot">·</span><span>${esc(modeName(s.payment_mode_id))}</span>` : ''}
+          ${credit ? '<span class="credit-tag">Credit</span>' : ''}
+          ${s.description     ? `<span class="si-meta-dot">·</span><span>${esc(s.description)}</span>` : ''}
+          ${s.period_display  ? `<span class="period-tag">${esc(fmtPeriodCode(s.period_display))}</span>` : ''}
+          ${(currentUser && s.user_id !== currentUser.id) ? `<span class="user-tag">${esc(userName(s.user_id))}</span>` : ''}
+        </div>
+      </div>
+      <div class="si-right">
+        <span class="si-amount${credit?' credit-amount':''}"  style="${credit?'color:var(--warn)':''}">Rs ${parseFloat(s.amount).toFixed(2)}</span>
+        <div style="display:flex;gap:6px">
+          <button class="si-del" onclick="openEditSpending(${s.id})" aria-label="Edit" title="Edit">
+            <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="si-del" onclick="deleteSpending(${s.id})" aria-label="Delete" title="Delete">
+            <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function isSpendingCredit(s) {
+  // Use the is_credit field returned by the API (resolved from payment mode), or fall back to local lookup
+  if (s.is_credit !== null && s.is_credit !== undefined) return !!s.is_credit;
+  const m = paymentModes.find(x => x.id === s.payment_mode_id);
+  return m ? !!m.is_credit : false;
+}
+
+async function fetchPrevPeriodCredit(viewPeriod) {
+  // Returns credit total from the period immediately before viewPeriod
+  const sorted = [...periods].sort((a,b) => new Date(b.starting_date) - new Date(a.starting_date));
+  const refPeriod = viewPeriod || currentPeriod;
+  const curIdx = sorted.findIndex(p => refPeriod && p.id === refPeriod.id);
+  if (curIdx < 0 || curIdx >= sorted.length - 1) return {total: 0, periodName: ''};
+  const prevP = sorted[curIdx + 1];
+  try {
+    const res  = await api('/spendings?period_id=' + prevP.id);
+    if (!res.ok) return {total: 0, periodName: ''};
+    const data = await res.json();
+    const total = data
+      .filter(s => !s.is_deleted && isSpendingCredit(s))
+      .reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+    return {total, periodName: fmtPeriodCode(prevP.period)};
+  } catch { return {total: 0, periodName: ''}; }
+}
+
+function updateStats() {
+  const now      = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const viewP    = selectedPeriod || currentPeriod;
+
+  // Only non-deleted spendings (allSpendings is already filtered, but guard anyway)
+  const active = allSpendings.filter(s => !s.is_deleted);
+
+  // ── Period tallies (from already-loaded period-scoped spendings) ──
+  let periodCash = 0, periodCredit = 0;
+  active.forEach(s => {
+    const amt = parseFloat(s.amount) || 0;
+    if (isSpendingCredit(s)) periodCredit += amt; else periodCash += amt;
+  });
+
+  // ── Today tallies ──
+  let todayCash = 0, todayCredit = 0;
+  active.forEach(s => {
+    if (s.date_incurred !== todayStr) return;
+    const amt = parseFloat(s.amount) || 0;
+    if (isSpendingCredit(s)) todayCredit += amt; else todayCash += amt;
+  });
+
+  // ── Card 1 label ──
+  const periodLabel = viewP ? fmtPeriodCode(viewP.period) : 'Current period';
+  setText('stat-period-label', periodLabel);
+
+  // Set cash + credit subrows immediately
+  setText('stat-cash',   fmt(periodCash));
+  setText('stat-credit', fmt(periodCredit));
+
+  // Fetch prev-period credit async only when the toggle is ON.
+  // We do NOT pre-write Rs 0 here — keeping the last rendered value in place
+  // until the fetch resolves prevents the visible 0 → amount flash on every poll.
+  if (showPrevPeriod) {
+    fetchPrevPeriodCredit(viewP).then(({total: prevCredit, periodName}) => {
+      setText('stat-period-prev', fmt(prevCredit));
+      const prevLbl = document.getElementById('stat-period-prev-label');
+      if (prevLbl) prevLbl.textContent = (periodName || 'Prev.') + ' credit';
+      setText('stat-period', fmt(periodCash + periodCredit + prevCredit));
+    });
+    // Set a preliminary grand total synchronously only on first render (when subrow
+    // is still showing the initial dash), so the card isn't blank while the fetch runs.
+    const existingPrev = document.getElementById('stat-period-prev');
+    if (!existingPrev || existingPrev.textContent === '—' || existingPrev.textContent === '') {
+      setText('stat-period', fmt(periodCash + periodCredit));
+    }
+  } else {
+    // Prev period hidden — grand total is only current period cash + credit
+    setText('stat-period', fmt(periodCash + periodCredit));
+  }
+
+  // ── Card 2: Today or Filter ──
+  const hasFilter = activeFilters.who !== 'all' || activeFilters.type !== 'all' ||
+                    activeFilters.payeeId !== null || activeFilters.modeId !== null;
+
+  if (hasFilter) {
+    // Apply the same filters renderSpendings uses and sum those results
+    let filtered = [...active];
+    if (activeFilters.who === 'mine') filtered = filtered.filter(s => currentUser && s.user_id === currentUser.id);
+    if (activeFilters.type === 'cash')   filtered = filtered.filter(s => !isSpendingCredit(s));
+    if (activeFilters.type === 'credit') filtered = filtered.filter(s =>  isSpendingCredit(s));
+    if (activeFilters.payeeId !== null)  filtered = filtered.filter(s => s.payee_id === activeFilters.payeeId);
+    if (activeFilters.modeId  !== null)  filtered = filtered.filter(s => s.payment_mode_id === activeFilters.modeId);
+
+    let filterCash = 0, filterCredit = 0;
+    filtered.forEach(s => {
+      const amt = parseFloat(s.amount) || 0;
+      if (isSpendingCredit(s)) filterCredit += amt; else filterCash += amt;
+    });
+
+    setText('stat-today-label',  'Filter');
+    setText('stat-today',        fmt(filterCash + filterCredit));
+    setText('stat-today-cash',   fmt(filterCash));
+    setText('stat-today-credit', fmt(filterCredit));
+  } else {
+    setText('stat-today-label',  'Today');
+    setText('stat-today',        fmt(todayCash + todayCredit));
+    setText('stat-today-cash',   fmt(todayCash));
+    setText('stat-today-credit', fmt(todayCredit));
+  }
+}
+
+function fmt(n) { return 'Rs ' + (n || 0).toFixed(0); }
+
+async function deleteSpending(id) {
+  if (!confirm('Delete this spending?')) return;
+  try {
+    const res = await api('/spendings/' + id, {method: 'DELETE'});
+    if (res.ok) {
+      allSpendings = allSpendings.filter(s => s.id !== id);
+      renderSpendings(); updateStats(); showToast('Spending deleted');
+    } else showToast('Delete failed');
+  } catch { showToast('Error deleting'); }
+}
+
+function openAddSpending() {
+  editingSpendingId = null;
+  setText('spending-sheet-title', 'New spending');
+  document.getElementById('f-amount').value = '';
+  document.getElementById('f-desc').value   = '';
+  document.getElementById('f-date').value   = new Date().toISOString().slice(0,10);
+  document.getElementById('f-payee').value  = '';
+  document.getElementById('f-mode').value   = '';
+  // Default assign-to = logged-in user
+  if (currentUser) {
+    for (const o of document.getElementById('f-user').options)
+      if (parseInt(o.value) === currentUser.id) { o.selected = true; break; }
+  }
+  document.getElementById('spending-err').classList.remove('visible');
+  document.getElementById('spending-save-btn').textContent = 'Save spending';
+  openSheet('sheet-spending');
+  setTimeout(() => document.getElementById('f-amount').focus(), 350);
+}
+
+function openEditSpending(id) {
+  const s = allSpendings.find(x => x.id === id); if (!s) return;
+  editingSpendingId = id;
+  setText('spending-sheet-title', 'Edit spending');
+  document.getElementById('f-amount').value = parseFloat(s.amount).toString();
+  document.getElementById('f-desc').value   = s.description || '';
+  document.getElementById('f-date').value   = s.date_incurred || '';
+  document.getElementById('f-payee').value  = s.payee_id || '';
+  document.getElementById('f-mode').value   = s.payment_mode_id || '';
+  for (const o of document.getElementById('f-user').options)
+    if (parseInt(o.value) === s.user_id) { o.selected = true; break; }
+  document.getElementById('spending-err').classList.remove('visible');
+  document.getElementById('spending-save-btn').textContent = 'Save changes';
+  openSheet('sheet-spending');
+  setTimeout(() => document.getElementById('f-amount').focus(), 350);
+}
+
+async function saveSpending() {
+  const err = document.getElementById('spending-err');
+  err.classList.remove('visible');
+  const amt = parseFloat(document.getElementById('f-amount').value);
+  if (!amt || amt <= 0) { showErr(err, 'Enter a valid amount.'); return; }
+  const payload = {
+    amount:          amt.toString(),
+    payee_id:        valOrNull('f-payee', true),
+    payment_mode_id: valOrNull('f-mode', true),
+    user_id:         valOrNull('f-user', true),
+    description:     document.getElementById('f-desc').value.trim() || null,
+    date_incurred:   document.getElementById('f-date').value || null
+  };
+  const btn = document.getElementById('spending-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    if (editingSpendingId) {
+      const res = await api('/spendings/' + editingSpendingId, {method: 'PUT', body: JSON.stringify(payload)});
+      if (res.ok) {
+        const updated = await res.json();
+        const idx = allSpendings.findIndex(x => x.id === editingSpendingId);
+        if (idx >= 0) allSpendings[idx] = {...allSpendings[idx], ...updated};
+        allSpendings.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+        renderSpendings(); updateStats();
+        closeSheet('sheet-spending'); showToast('Spending updated ✓');
+      } else {
+        const d = await res.json().catch(() => ({}));
+        showErr(err, d.detail || 'Update failed.');
+      }
+    } else {
+      const res = await api('/spendings', {method:'POST', body:JSON.stringify(payload)});
+      if (res.ok) {
+        const s = await res.json();
+        allSpendings.unshift(s);
+        allSpendings.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+        renderSpendings(); updateStats();
+        closeSheet('sheet-spending'); showToast('Spending saved ✓');
+      } else {
+        const d = await res.json().catch(() => ({}));
+        showErr(err, d.detail || 'Save failed.');
+      }
+    }
+  } catch { showErr(err, 'Connection error.'); }
+  finally { btn.disabled = false; btn.textContent = editingSpendingId ? 'Save changes' : 'Save spending'; }
+}
+
+// ── Payees ───────────────────────────────────────────────
+function renderPayees() {
+  const list = document.getElementById('payees-list');
+  if (!list) return;
+  if (!payees.length) { list.innerHTML = '<div class="empty" style="padding:20px 0">No payees added yet</div>'; return; }
+  list.innerHTML = payees.map(p => `
+    <div class="setting-item">
+      <div style="flex:1;min-width:0"><div class="setting-name">${esc(p.name)}</div></div>
+      <div class="setting-actions">
+        <span class="badge ${p.is_active ? 'badge-active':'badge-inactive'}">${p.is_active ? 'Active':'Inactive'}</span>
+        <button class="edit-btn" onclick="openEditPayee(${p.id})">Edit</button>
+        <button class="toggle-btn" onclick="togglePayee(${p.id})">${p.is_active ? 'Disable':'Enable'}</button>
+        <button class="del-btn" onclick="deletePayee(${p.id})" aria-label="Delete">
+          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+function openAddPayee() {
+  editingPayeeId = null;
+  setText('payee-sheet-title', 'Add payee');
+  document.getElementById('p-name').value = '';
+  document.getElementById('payee-err').classList.remove('visible');
+  document.getElementById('payee-save-btn').textContent = 'Add payee';
+  openSheet('sheet-payee');
+  setTimeout(() => document.getElementById('p-name').focus(), 350);
+}
+
+function openEditPayee(id) {
+  const p = payees.find(x => x.id === id); if (!p) return;
+  editingPayeeId = id;
+  setText('payee-sheet-title', 'Edit payee');
+  document.getElementById('p-name').value = p.name;
+  document.getElementById('payee-err').classList.remove('visible');
+  document.getElementById('payee-save-btn').textContent = 'Save changes';
+  openSheet('sheet-payee');
+  setTimeout(() => document.getElementById('p-name').focus(), 350);
+}
+
+async function savePayee() {
+  const err  = document.getElementById('payee-err'); err.classList.remove('visible');
+  const name = document.getElementById('p-name').value.trim();
+  if (!name) { showErr(err, 'Payee name is required.'); return; }
+  const btn  = document.getElementById('payee-save-btn');
+  btn.disabled = true; btn.textContent = editingPayeeId ? 'Saving…' : 'Adding…';
+  try {
+    if (editingPayeeId) {
+      // PUT /payees/{id} — PayeeUpdateSchema requires name + is_active
+      const p   = payees.find(x => x.id === editingPayeeId);
+      const res = await api('/payees/' + editingPayeeId, {
+        method: 'PUT',
+        body:   JSON.stringify({name, is_active: p ? p.is_active : true})
+      });
+      if (res.ok) {
+        if (p) p.name = name;
+        populateForms(); renderPayees();
+        closeSheet('sheet-payee'); showToast('Payee renamed');
+      } else { const d = await res.json().catch(() => ({})); showErr(err, d.detail || 'Rename failed.'); }
+    } else {
+      const res = await api('/payees', {method: 'POST', body: JSON.stringify({name})});
+      if (res.status === 201) {
+        payees.push(await res.json());
+        populateForms(); buildFilterChips(); renderPayees();
+        closeSheet('sheet-payee'); showToast('Payee added');
+      } else { const d = await res.json().catch(() => ({})); showErr(err, d.detail || 'Failed.'); }
+    }
+  } catch { showErr(err, 'Connection error.'); }
+  finally { btn.disabled = false; btn.textContent = editingPayeeId ? 'Save changes' : 'Add payee'; }
+}
+
+async function togglePayee(id) {
+  const p = payees.find(x => x.id === id); if (!p) return;
+  try {
+    const res = await api('/payees/' + id, {
+      method: 'PUT',
+      body:   JSON.stringify({name: p.name, is_active: !p.is_active})
+    });
+    if (res.ok) { p.is_active = !p.is_active; populateForms(); buildFilterChips(); renderPayees(); showToast('Payee updated'); }
+  } catch { showToast('Error'); }
+}
+
+async function deletePayee(id) {
+  if (!confirm('Delete this payee?')) return;
+  try {
+    const res = await api('/payees/'+id, {method:'DELETE'});
+    if (res.ok) { payees=payees.filter(p=>p.id!==id); populateForms(); buildFilterChips(); renderPayees(); showToast('Payee deleted'); }
+  } catch { showToast('Error'); }
+}
+
+// ── Payment Modes ────────────────────────────────────────
+function renderModes() {
+  const list = document.getElementById('modes-list');
+  if (!list) return;
+  if (!paymentModes.length) { list.innerHTML='<div class="empty" style="padding:20px 0">No payment modes yet</div>'; return; }
+  list.innerHTML = paymentModes.map(m => `
+    <div class="setting-item">
+      <div style="flex:1;min-width:0">
+        <div class="setting-name">${esc(m.name)}</div>
+        ${m.description ? `<div class="setting-meta">${esc(m.description)}</div>` : ''}
+      </div>
+      <div class="setting-actions">
+        <span class="badge ${m.is_active ? 'badge-active':'badge-inactive'}">${m.is_active ? 'Active':'Inactive'}</span>
+        ${m.is_credit ? '<span class="badge badge-credit">Credit</span>' : ''}
+        <button class="edit-btn" onclick="openEditMode(${m.id})">Edit</button>
+        <button class="toggle-btn" onclick="toggleMode(${m.id})">${m.is_active ? 'Disable':'Enable'}</button>
+        <button class="del-btn" onclick="deleteMode(${m.id})" aria-label="Delete">
+          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+function openAddMode() {
+  editingModeId = null;
+  setText('mode-sheet-title', 'Add payment mode');
+  document.getElementById('m-name').value    = '';
+  document.getElementById('m-desc').value    = '';
+  document.getElementById('m-credit').checked = false;
+  document.getElementById('mode-err').classList.remove('visible');
+  document.getElementById('mode-save-btn').textContent = 'Add mode';
+  openSheet('sheet-mode');
+  setTimeout(() => document.getElementById('m-name').focus(), 350);
+}
+
+function openEditMode(id) {
+  const m = paymentModes.find(x => x.id === id); if (!m) return;
+  editingModeId = id;
+  setText('mode-sheet-title', 'Edit payment mode');
+  document.getElementById('m-name').value    = m.name;
+  document.getElementById('m-desc').value    = m.description || '';
+  document.getElementById('m-credit').checked = !!m.is_credit;
+  document.getElementById('mode-err').classList.remove('visible');
+  document.getElementById('mode-save-btn').textContent = 'Save changes';
+  openSheet('sheet-mode');
+  setTimeout(() => document.getElementById('m-name').focus(), 350);
+}
+
+async function saveMode() {
+  const err      = document.getElementById('mode-err'); err.classList.remove('visible');
+  const name     = document.getElementById('m-name').value.trim();
+  const desc     = document.getElementById('m-desc').value.trim();
+  const is_credit = document.getElementById('m-credit').checked;
+  if (!name) { showErr(err, 'Mode name is required.'); return; }
+  const btn  = document.getElementById('mode-save-btn');
+  btn.disabled = true; btn.textContent = editingModeId ? 'Saving…' : 'Adding…';
+  try {
+    if (editingModeId) {
+      const m   = paymentModes.find(x => x.id === editingModeId);
+      const res = await api('/payment-modes/' + editingModeId, {
+        method: 'PUT',
+        body:   JSON.stringify({name, description: desc || null, is_credit, is_active: m ? m.is_active : true})
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        const idx = paymentModes.findIndex(x => x.id === editingModeId);
+        if (idx >= 0) paymentModes[idx] = {...paymentModes[idx], ...updated, name, description: desc || null, is_credit};
+        populateForms(); buildFilterChips(); renderModes(); updateStats();
+        closeSheet('sheet-mode'); showToast('Mode updated');
+      } else { const d = await res.json().catch(() => ({})); showErr(err, d.detail || 'Update failed.'); }
+    } else {
+      const res = await api('/payment-modes', {method: 'POST', body: JSON.stringify({name, description: desc || null, is_credit})});
+      if (res.status === 201) {
+        paymentModes.push(await res.json());
+        populateForms(); buildFilterChips(); renderModes();
+        closeSheet('sheet-mode'); showToast('Mode added');
+      } else { const d = await res.json().catch(() => ({})); showErr(err, d.detail || 'Failed.'); }
+    }
+  } catch { showErr(err, 'Connection error.'); }
+  finally { btn.disabled = false; btn.textContent = editingModeId ? 'Save changes' : 'Add mode'; }
+}
+
+async function toggleMode(id) {
+  const m = paymentModes.find(x => x.id === id); if (!m) return;
+  try {
+    const res = await api('/payment-modes/' + id, {
+      method: 'PUT',
+      body:   JSON.stringify({name: m.name, description: m.description || null, is_credit: !!m.is_credit, is_active: !m.is_active})
+    });
+    if (res.ok) { m.is_active = !m.is_active; populateForms(); buildFilterChips(); renderModes(); showToast('Mode updated'); }
+  } catch { showToast('Error'); }
+}
+
+async function deleteMode(id) {
+  if (!confirm('Delete this mode?')) return;
+  try {
+    const res = await api('/payment-modes/' + id, {method: 'DELETE'});
+    if (res.ok) { paymentModes = paymentModes.filter(m => m.id !== id); populateForms(); buildFilterChips(); renderModes(); showToast('Mode deleted'); }
+  } catch { showToast('Error'); }
+}
+
+// ── Periods ──────────────────────────────────────────────
+function renderPeriods() {
+  const list = document.getElementById('periods-list');
+  if (!list) return;
+  const sorted = [...periods].sort((a,b) => new Date(b.starting_date)-new Date(a.starting_date));
+  if (!sorted.length) { list.innerHTML='<div class="empty" style="padding:20px 0">No periods yet. Add one to track spending by month.</div>'; return; }
+  list.innerHTML = sorted.map(p => {
+    const isCurrent = currentPeriod && p.id === currentPeriod.id;
+    return `<div class="setting-item">
+      <div style="flex:1;min-width:0">
+        <div class="setting-name" style="display:flex;align-items:center;gap:6px">
+          ${esc(fmtPeriodCode(p.period))}
+          ${isCurrent ? '<span class="badge badge-current">Current</span>' : ''}
+        </div>
+        <div class="setting-meta">Starts ${fmtDate(p.starting_date)}</div>
+      </div>
+      <div class="setting-actions">
+        <button class="edit-btn" onclick="openEditPeriod(${p.id})">Edit</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openAddPeriod() {
+  editingPeriodId = null;
+  setText('period-sheet-title','Add period');
+  document.getElementById('pr-code').value  = '';
+  document.getElementById('pr-start').value = '';
+  document.getElementById('period-err').classList.remove('visible');
+  document.getElementById('period-save-btn').textContent = 'Save period';
+  openSheet('sheet-period');
+  setTimeout(()=>document.getElementById('pr-code').focus(),350);
+}
+
+function openEditPeriod(id) {
+  const p = periods.find(x=>x.id===id); if (!p) return;
+  editingPeriodId = id;
+  setText('period-sheet-title','Edit period');
+  document.getElementById('pr-code').value  = p.period;
+  document.getElementById('pr-start').value = p.starting_date;
+  document.getElementById('period-err').classList.remove('visible');
+  document.getElementById('period-save-btn').textContent = 'Update period';
+  openSheet('sheet-period');
+}
+
+function autofillPeriodStart() {
+  const code    = document.getElementById('pr-code').value;
+  const startEl = document.getElementById('pr-start');
+  if (code.length === 6 && !startEl.value) {
+    const mm = code.slice(0,2).padStart(2,'0');
+    const yy = code.slice(2);
+    startEl.value = `${yy}-${mm}-01`;
+  }
+}
+
+async function savePeriod() {
+  const err   = document.getElementById('period-err'); err.classList.remove('visible');
+  const code  = document.getElementById('pr-code').value.trim();
+  const start = document.getElementById('pr-start').value;
+  if (!/^\d{6}$/.test(code))                    { showErr(err,'Period code must be exactly 6 digits (MMYYYY).'); return; }
+  if (parseInt(code.slice(0,2),10)<1 || parseInt(code.slice(0,2),10)>12) { showErr(err,'Month must be 01–12.'); return; }
+  if (!start)                                    { showErr(err,'Starting date is required.'); return; }
+  const payload = {period: code, starting_date: start};
+  const btn = document.getElementById('period-save-btn'); btn.disabled=true; btn.textContent='Saving…';
+  try {
+    const res = editingPeriodId
+      ? await api('/periods/'+editingPeriodId, {method:'PUT', body:JSON.stringify(payload)})
+      : await api('/periods',                  {method:'POST',body:JSON.stringify(payload)});
+    if (res.ok || res.status===201) {
+      const p = await res.json();
+      if (editingPeriodId) { const idx=periods.findIndex(x=>x.id===editingPeriodId); if(idx>=0) periods[idx]=p; else periods.push(p); }
+      else periods.push(p);
+      resolvCurrentPeriod(); renderPeriods(); renderPeriodBanner(); populatePeriodSelect(); updateStats();
+      closeSheet('sheet-period'); showToast(editingPeriodId ? 'Period updated':'Period added');
+    } else { const d=await res.json().catch(()=>({})); showErr(err,d.detail||'Failed.'); }
+  } catch { showErr(err,'Connection error.'); }
+  finally { btn.disabled=false; btn.textContent=editingPeriodId?'Update period':'Save period'; }
+}
+
+// ── Prev-period toggle ───────────────────────────────────
+let showPrevPeriod = localStorage.getItem('hs_show_prev_period') !== 'false'; // default true
+
+function applyPrevPeriodToggleUI() {
+  const row  = document.getElementById('stat-period-prev-row');
+  const btn  = document.getElementById('prev-period-toggle');
+  const icon = document.getElementById('prev-period-toggle-icon');
+  const lbl  = document.getElementById('prev-period-toggle-label');
+  if (row)  row.style.display  = showPrevPeriod ? '' : 'none';
+  if (btn)  btn.style.color    = showPrevPeriod ? 'var(--accent-text)' : 'var(--text3)';
+  if (btn)  btn.style.borderColor = showPrevPeriod ? 'var(--accent)' : '';
+  if (icon) icon.style.opacity = showPrevPeriod ? '1' : '0.4';
+  if (lbl)  lbl.textContent    = showPrevPeriod ? 'Prev' : 'Prev';
+}
+
+function togglePrevPeriod() {
+  showPrevPeriod = !showPrevPeriod;
+  localStorage.setItem('hs_show_prev_period', showPrevPeriod);
+  applyPrevPeriodToggleUI();
+  updateStats();
+}
+
+// ── Filter panel ─────────────────────────────────────────
+function toggleFilterPanel() {
+  filterPanelOpen = !filterPanelOpen;
+  const panel = document.getElementById('filter-panel');
+  const btn   = document.getElementById('filter-toggle-btn');
+  if (panel) panel.classList.toggle('collapsed', !filterPanelOpen);
+  if (btn)   btn.style.borderColor = filterPanelOpen ? 'var(--accent)' : '';
+}
+
+function buildFilterChips() {
+  // Payee chips
+  const payeeRow = document.getElementById('filter-payee-row');
+  if (payeeRow) {
+    const active = payees.filter(p => p.is_active);
+    payeeRow.innerHTML = `<button class="chip chip-sm active" data-group="payee" data-val="all" onclick="setFilterChip(this,'payee','all')">All</button>` +
+      active.map(p =>
+        `<button class="chip chip-sm" data-group="payee" data-val="${p.id}" onclick="setFilterChip(this,'payee',${p.id})">${esc(p.name)}</button>`
+      ).join('');
+  }
+  // Mode chips
+  const modeRow = document.getElementById('filter-mode-row');
+  if (modeRow) {
+    const active = paymentModes.filter(m => m.is_active);
+    modeRow.innerHTML = `<button class="chip chip-sm active" data-group="mode" data-val="all" onclick="setFilterChip(this,'mode','all')">All</button>` +
+      active.map(m =>
+        `<button class="chip chip-sm" data-group="mode" data-val="${m.id}" onclick="setFilterChip(this,'mode',${m.id})">${esc(m.name)}</button>`
+      ).join('');
+  }
+}
+
+function setFilterChip(btn, group, val) {
+  // Deactivate all chips in this group
+  const row = btn.closest('.filter-row');
+  if (row) row.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+
+  if (group === 'who')   activeFilters.who    = val;
+  if (group === 'type')  activeFilters.type   = val;
+  if (group === 'payee') activeFilters.payeeId = (val === 'all') ? null : parseInt(val);
+  if (group === 'mode')  activeFilters.modeId  = (val === 'all') ? null : parseInt(val);
+
+  updateFilterBadge();
+  renderSpendings();
+  updateStats();
+}
+
+function clearAllFilters() {
+  activeFilters = { who: 'all', type: 'all', payeeId: null, modeId: null };
+  // Reset every chip group to "All / Everyone"
+  ['filter-who-row','filter-type-row','filter-payee-row','filter-mode-row'].forEach(id => {
+    const row = document.getElementById(id);
+    if (!row) return;
+    row.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    const first = row.querySelector('.chip');
+    if (first) first.classList.add('active');
+  });
+  updateFilterBadge();
+  renderSpendings();
+  updateStats();
+}
+
+function updateFilterBadge() {
+  const count = [
+    activeFilters.who    !== 'all',
+    activeFilters.type   !== 'all',
+    activeFilters.payeeId !== null,
+    activeFilters.modeId  !== null,
+  ].filter(Boolean).length;
+
+  const badge = document.getElementById('filter-active-count');
+  if (badge) {
+    badge.textContent = count;
+    badge.classList.toggle('hidden', count === 0);
+  }
+  const btn = document.getElementById('filter-toggle-btn');
+  if (btn) btn.style.color = count > 0 ? 'var(--accent)' : '';
+}
+
+// legacy stub kept in case anything else calls it
+function setFilter(btn, filter) {
+  activeFilter = filter;
+  renderSpendings();
+}
+
+// ── Sheet helpers ────────────────────────────────────────
+function openSheet(id)  { document.getElementById(id).classList.add('open');    document.body.style.overflow='hidden'; }
+function closeSheet(id) { document.getElementById(id).classList.remove('open'); document.body.style.overflow=''; }
+document.querySelectorAll('.sheet-backdrop').forEach(b => {
+  b.addEventListener('click', e => { if (e.target === b) closeSheet(b.id); });
+});
+
+// open profile sheet via the Edit profile button (also callable inline)
+document.getElementById('sheet-profile')
+  .querySelector('.sheet-backdrop');
+// wire the Edit profile button
+document.addEventListener('DOMContentLoaded', () => {});
+
+// ── Utilities ────────────────────────────────────────────
+function esc(s) { if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function setText(id,v) { const e=document.getElementById(id); if(e) e.textContent=v; }
+function showErr(el,msg) { el.textContent=msg; el.classList.add('visible'); }
+function valOrNull(id,asInt=false) { const v=document.getElementById(id).value; if(!v) return null; return asInt?parseInt(v):v; }
+function payeeName(id) { const p=payees.find(x=>x.id==id); return p?p.name:(id?'Payee #'+id:'—'); }
+function modeName(id)  { const m=paymentModes.find(x=>x.id==id); return m?m.name:''; }
+function userName(id)  { const u=users.find(x=>x.id==id); return u?(u.nickname||u.name||'User'):'?'; }
+function fmtDate(d)    { if(!d) return ''; const dt=new Date(d+'T00:00:00'); return dt.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); }
+
+let toastTimer=null;
+function showToast(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key==='Escape') document.querySelectorAll('.sheet-backdrop.open').forEach(b=>closeSheet(b.id));
+});
+document.getElementById('l-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+// ── Init ─────────────────────────────────────────────────
+(async () => {
+  const ok = await resolveNet(false);
+  if (!ok) return;
+  if (token) {
+    showScreen('main');
+    await bootApp();
+  }
+})();
+  if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/spendings/sw.js');
+  }
+</script>
+</body>
+</html>
